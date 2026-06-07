@@ -24,6 +24,23 @@ def get_current_user(db: Session = Depends(get_db), token: str = Depends(oauth2_
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
+    
+    # Support mock token bypass for local development & guest demo workflow
+    if token == "mock-jwt-token":
+        guest_email = "guest@example.com"
+        user = db.query(User).filter(User.email == guest_email).first()
+        if not user:
+            user = User(
+                name="Guest User",
+                email=guest_email,
+                password_hash="mock-password-hash",
+                is_admin=False
+            )
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+        return user
+
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM])
         email: str = payload.get("sub")

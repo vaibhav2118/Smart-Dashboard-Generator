@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, Integer, DateTime, ForeignKey
+from sqlalchemy import Column, String, Integer, DateTime, ForeignKey, Text
 from sqlalchemy.dialects.postgresql import UUID
 from app.models.base import Base
 
@@ -16,3 +16,6 @@ class Dataset(Base):
     upload_date = Column(DateTime, default=datetime.utcnow)
     row_count = Column(Integer)
     column_count = Column(Integer)
+    dataset_category = Column(String, default="General Dataset")
+    detected_columns = Column(Text, nullable=True) # JSON string
+    last_profiled_at = Column(DateTime, nullable=True)
