@@ -58,3 +58,34 @@ def get_current_user(db: Session = Depends(get_db), token: str = Depends(oauth2_
 def get_current_active_user(current_user: User = Depends(get_current_user)) -> User:
     # Here we could add logic to check if user is active, etc.
     return current_user
+
+import time
+from collections import defaultdict
+
+class RateLimiter:
+    def __init__(self, requests_limit: int = 5, window_seconds: int = 60):
+        self.requests_limit = requests_limit
+        self.window_seconds = window_seconds
+        self.history = defaultdict(list)
+        
+    def __call__(self, current_user: User = Depends(get_current_user)):
+        user_id = str(current_user.id)
+        now = time.time()
+        
+        # Clean history to keep only timestamps in the current window
+        user_history = self.history[user_id]
+        self.history[user_id] = [t for t in user_history if now - t < self.window_seconds]
+        
+        if len(self.history[user_id]) >= self.requests_limit:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"Rate limit exceeded. Maximum {self.requests_limit} requests per {self.window_seconds} seconds are allowed."
+            )
+            
+        self.history[user_id].append(now)
+        return current_user
+
+# Pre-defined rate limiters for specific operations
+ai_rate_limiter = RateLimiter(requests_limit=5, window_seconds=60)
+forecast_rate_limiter = RateLimiter(requests_limit=5, window_seconds=60)
+report_rate_limiter = RateLimiter(requests_limit=5, window_seconds=60)

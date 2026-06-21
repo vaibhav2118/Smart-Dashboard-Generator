@@ -16,6 +16,10 @@ import AIInsights from './pages/AIInsights';
 import Forecasting from './pages/Forecasting';
 import DashboardStudio from './pages/DashboardStudio';
 import DataPreparation from './pages/DataPreparation';
+import ReportBuilder from './pages/ReportBuilder';
+import PublicDashboard from './pages/PublicDashboard';
+import Chat from './pages/Chat';
+
 
 const ProtectedRoute = ({ children }) => {
   const { user, loading } = useContext(AuthContext);
@@ -38,6 +42,7 @@ function App() {
       <Route path="/" element={<Landing />} />
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
+      <Route path="/share/:token" element={<PublicDashboard />} />
       
       {/* Protected Routes (under layout) */}
       <Route element={
@@ -56,6 +61,8 @@ function App() {
         <Route path="/insights/:id" element={<AIInsights />} />
         <Route path="/forecast/:id" element={<Forecasting />} />
         <Route path="/dashboard/:datasetId" element={<DashboardStudio />} />
+        <Route path="/report-builder/:datasetId" element={<ReportBuilder />} />
+        <Route path="/chat/:datasetId" element={<Chat />} />
       </Route>
 
       {/* Fallback Catch-all */}

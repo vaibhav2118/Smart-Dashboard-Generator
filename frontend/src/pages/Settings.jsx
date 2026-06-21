@@ -9,11 +9,11 @@ import {
     Sun, 
     Moon, 
     Key, 
-    KeyRound, 
     Eye, 
     EyeOff, 
     Trash2, 
-    CheckCircle2 
+    CheckCircle2,
+    Database
 } from 'lucide-react';
 
 const Settings = () => {
@@ -30,12 +30,18 @@ const Settings = () => {
     const [emailNotifs, setEmailNotifs] = useState(true);
     const [analysisAlerts, setAnalysisAlerts] = useState(true);
 
-    const tabs = ['Profile', 'Theme', 'Notifications', 'Security', 'API Keys'];
+    // Storage metrics states
+    const [storageMetrics, setStorageMetrics] = useState(null);
+    const [loadingStorage, setLoadingStorage] = useState(false);
+
+    const tabs = ['Profile', 'Theme', 'Notifications', 'Security', 'API Keys', 'Storage'];
 
     useEffect(() => {
         const fetchSettings = async () => {
             try {
-                const response = await axios.get('http://localhost:8000/api/settings/');
+                const token = localStorage.getItem('token');
+                const headers = { 'Authorization': `Bearer ${token}` };
+                const response = await axios.get('http://localhost:8000/api/settings/', { headers });
                 const data = response.data;
                 setApiKey(data.openai_key || '');
                 setEmailNotifs(data.email_notifications);
@@ -47,14 +53,35 @@ const Settings = () => {
         fetchSettings();
     }, []);
 
+    useEffect(() => {
+        if (activeTab === 'Storage') {
+            const fetchStorage = async () => {
+                setLoadingStorage(true);
+                try {
+                    const token = localStorage.getItem('token');
+                    const headers = { 'Authorization': `Bearer ${token}` };
+                    const response = await axios.get('http://localhost:8000/api/settings/storage', { headers });
+                    setStorageMetrics(response.data);
+                } catch (error) {
+                    console.error("Error loading storage metrics:", error);
+                } finally {
+                    setLoadingStorage(false);
+                }
+            };
+            fetchStorage();
+        }
+    }, [activeTab]);
+
     const handleSave = async (section) => {
         try {
+            const token = localStorage.getItem('token');
+            const headers = { 'Authorization': `Bearer ${token}` };
             const payload = {
                 openai_key: apiKey,
                 email_notifications: emailNotifs,
                 analysis_alerts: analysisAlerts
             };
-            await axios.put('http://localhost:8000/api/settings/', payload);
+            await axios.put('http://localhost:8000/api/settings/', payload, { headers });
             setSuccessMsg(`${section} preferences saved successfully!`);
             setTimeout(() => setSuccessMsg(null), 3000);
         } catch (error) {
@@ -65,15 +92,23 @@ const Settings = () => {
 
     const handleDeleteAccount = () => {
         if (confirm("WARNING: Are you absolutely sure you want to delete your account? This action is permanent and cannot be undone.")) {
-            alert("Account deleted (simulated).");
+            alert("Account deletion (simulated).");
         }
     };
 
+    const formatBytes = (bytes) => {
+        if (!bytes || bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    };
+
     return (
-        <div className="space-y-8 max-w-4xl select-none animate-in fade-in duration-200">
+        <div className="space-y-8 max-w-4xl select-none animate-in fade-in duration-200 text-left">
             <div>
                 <h1 className="text-3xl font-extrabold tracking-tight">Account Configuration</h1>
-                <p className="text-slate-500 dark:text-slate-450 mt-1">
+                <p className="text-slate-500 dark:text-slate-455 mt-1">
                     Manage your account details, visual preferences, and AI integrations.
                 </p>
             </div>
@@ -208,7 +243,6 @@ const Settings = () => {
                 {/* 4. SECURITY PANEL */}
                 {activeTab === 'Security' && (
                     <div className="space-y-8">
-                        {/* Change Password */}
                         <div className="space-y-6">
                             <h2 className="text-lg font-bold flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
                                 <Shield size={18} className="text-indigo-500" /> Account Security
@@ -248,7 +282,7 @@ const Settings = () => {
                         </div>
 
                         {/* Danger Zone */}
-                        <div className="border-t border-red-200 dark:border-red-950/40 pt-6 space-y-4">
+                        <div className="border-t border-red-200 dark:border-red-955 pt-6 space-y-4">
                             <h3 className="text-sm font-bold text-red-650 flex items-center gap-2"><Trash2 size={16} /> Danger Zone</h3>
                             <div className="p-4 bg-red-50/50 dark:bg-red-950/10 border border-red-200 dark:border-red-900/30 rounded-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                                 <div className="text-xs">
@@ -270,7 +304,7 @@ const Settings = () => {
                 {activeTab === 'API Keys' && (
                     <div className="space-y-6">
                         <h2 className="text-lg font-bold flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
-                            <Key size={18} className="text-indigo-500" /> Integration Keys
+                            <Key size={18} className="text-indigo-550" /> Integration Keys
                         </h2>
                         
                         <div className="max-w-lg space-y-4">
@@ -285,13 +319,13 @@ const Settings = () => {
                                         type={showApiKey ? 'text' : 'password'}
                                         value={apiKey}
                                         onChange={(e) => setApiKey(e.target.value)}
-                                        className="pl-3.5 pr-10 py-2 border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 rounded-xl text-sm w-full focus:outline-none focus:ring-2 focus:ring-indigo-505/25"
+                                        className="pl-3.5 pr-10 py-2 border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 rounded-xl text-sm w-full focus:outline-none"
                                         placeholder="sk-proj-..."
                                     />
                                     <button
                                         type="button"
                                         onClick={() => setShowApiKey(!showApiKey)}
-                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-450 hover:text-slate-700 dark:hover:text-slate-300"
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-455 hover:text-slate-700 dark:hover:text-slate-300"
                                     >
                                         {showApiKey ? <EyeOff size={16} /> : <Eye size={16} />}
                                     </button>
@@ -305,6 +339,49 @@ const Settings = () => {
                                 Save API Key
                             </button>
                         </div>
+                    </div>
+                )}
+
+                {/* 6. STORAGE MONITORING PANEL */}
+                {activeTab === 'Storage' && (
+                    <div className="space-y-6">
+                        <h2 className="text-lg font-bold flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
+                            <Database size={18} className="text-indigo-500" /> Workspace Storage Metrics
+                        </h2>
+                        
+                        {loadingStorage ? (
+                            <div className="flex items-center gap-2 text-xs text-slate-500">
+                                <div className="animate-spin border-2 border-indigo-600 border-t-transparent w-4 h-4 rounded-full" />
+                                Loading real-time storage metrics...
+                            </div>
+                        ) : storageMetrics ? (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">
+                                <div className="bg-slate-50 dark:bg-slate-950 p-5 border border-slate-150 dark:border-slate-850 rounded-2xl">
+                                    <span className="text-[10px] text-slate-450 font-bold uppercase tracking-wider block">Datasets Count</span>
+                                    <span className="text-3xl font-extrabold text-slate-800 dark:text-slate-100 block mt-1">{storageMetrics.dataset_count}</span>
+                                </div>
+                                <div className="bg-slate-50 dark:bg-slate-950 p-5 border border-slate-150 dark:border-slate-850 rounded-2xl">
+                                    <span className="text-[10px] text-slate-455 font-bold uppercase tracking-wider block">Reports Count</span>
+                                    <span className="text-3xl font-extrabold text-slate-800 dark:text-slate-100 block mt-1">{storageMetrics.report_count}</span>
+                                </div>
+                                <div className="bg-slate-50 dark:bg-slate-950 p-5 border border-slate-150 dark:border-slate-850 rounded-2xl">
+                                    <span className="text-[10px] text-slate-455 font-bold uppercase tracking-wider block">Physical Disk Usage</span>
+                                    <span className="text-3xl font-extrabold text-slate-800 dark:text-slate-100 block mt-1">{formatBytes(storageMetrics.disk_usage)}</span>
+                                </div>
+                                <div className="bg-slate-50 dark:bg-slate-950 p-5 border border-slate-150 dark:border-slate-850 rounded-2xl">
+                                    <span className="text-[10px] text-slate-455 font-bold uppercase tracking-wider block">Forecast Caches size</span>
+                                    <span className="text-3xl font-extrabold text-slate-800 dark:text-slate-100 block mt-1">{storageMetrics.forecast_cache_size}</span>
+                                    <span className="text-[10px] text-slate-450 font-medium block mt-1">Serialized coordinate grids</span>
+                                </div>
+                                <div className="bg-slate-50 dark:bg-slate-950 p-5 border border-slate-150 dark:border-slate-850 rounded-2xl">
+                                    <span className="text-[10px] text-slate-455 font-bold uppercase tracking-wider block">AI Insights Caches size</span>
+                                    <span className="text-3xl font-extrabold text-slate-800 dark:text-slate-100 block mt-1">{storageMetrics.insight_cache_size}</span>
+                                    <span className="text-[10px] text-slate-450 font-medium block mt-1">Cached executive JSON fields</span>
+                                </div>
+                            </div>
+                        ) : (
+                            <p className="text-xs text-red-500">Could not retrieve system storage metrics.</p>
+                        )}
                     </div>
                 )}
 

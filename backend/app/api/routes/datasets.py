@@ -11,6 +11,8 @@ from app.models.dataset import Dataset
 from app.models.dashboard import Dashboard
 import pandas as pd
 from pydantic import BaseModel
+import re
+from app.core.logging_helper import log_application_error, log_user_activity
 
 def sanitize_nans(obj):
     if isinstance(obj, dict):
@@ -75,14 +77,39 @@ async def upload_dataset(
     ext = os.path.splitext(file.filename)[1].lower()
     
     if ext not in allowed_extensions:
+        error_msg = f"Unsupported file type '{ext}' rejected."
+        log_application_error(db, current_user.id, "/api/datasets/upload", "FileValidationError", error_msg)
         raise HTTPException(status_code=400, detail="Only CSV and Excel files are allowed.")
     
+    # Check file size limit (25 MB)
+    MAX_FILE_SIZE = 25 * 1024 * 1024
+    try:
+        content = await file.read()
+        file_size = len(content)
+        if file_size > MAX_FILE_SIZE:
+            error_msg = f"File size {file_size} bytes exceeds maximum limit of 25MB."
+            log_application_error(db, current_user.id, "/api/datasets/upload", "FileSizeLimitError", error_msg)
+            raise HTTPException(status_code=400, detail="File size exceeds the maximum limit of 25MB.")
+    except HTTPException:
+        raise
+    except Exception as e:
+        log_application_error(db, current_user.id, "/api/datasets/upload", "FileUploadError", f"Failed to read upload file: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Failed to process file upload: {str(e)}")
+
+    # Sanitize original filename (preventing path traversal and unexpected characters)
+    sanitized_filename = re.sub(r'[^a-zA-Z0-9._-]', '_', file.filename)
+    if not sanitized_filename:
+        sanitized_filename = f"dataset_{uuid.uuid4().hex[:8]}{ext}"
+
     file_id = str(uuid.uuid4())
     save_path = os.path.join(UPLOAD_DIR, f"{file_id}{ext}")
     
-    with open(save_path, "wb") as buffer:
-        content = await file.read()
-        buffer.write(content)
+    try:
+        with open(save_path, "wb") as buffer:
+            buffer.write(content)
+    except Exception as e:
+        log_application_error(db, current_user.id, "/api/datasets/upload", "IOError", f"Failed to save file to disk: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to write file to disk.")
         
     try:
         if ext == '.csv':
@@ -90,14 +117,16 @@ async def upload_dataset(
         else:
             df = pd.read_excel(save_path)
     except Exception as e:
-        os.remove(save_path)
+        if os.path.exists(save_path):
+            os.remove(save_path)
+        log_application_error(db, current_user.id, "/api/datasets/upload", "DataParsingError", f"Failed to parse uploaded dataset: {str(e)}")
         raise HTTPException(status_code=400, detail=f"Failed to read file: {str(e)}")
         
     row_count, col_count = df.shape
     
     new_dataset = Dataset(
         user_id=current_user.id,
-        filename=file.filename,
+        filename=sanitized_filename,
         file_path=save_path,
         dataset_type=ext.upper().replace('.', ''),
         row_count=row_count,
@@ -108,6 +137,9 @@ async def upload_dataset(
     db.add(new_dataset)
     db.commit()
     db.refresh(new_dataset)
+    
+    # Audit success
+    log_user_activity(db, current_user.id, "Upload", f"Uploaded dataset '{sanitized_filename}' successfully with ID {new_dataset.id}")
     
     return {"message": "Dataset uploaded successfully", "dataset_id": new_dataset.id, "rows": row_count, "columns": col_count}
 
@@ -142,20 +174,30 @@ def delete_dataset(
     try:
         dataset_uuid = uuid.UUID(dataset_id)
     except ValueError:
+        log_application_error(db, current_user.id, f"/api/datasets/{dataset_id}", "InvalidIDError", "Invalid dataset ID format on deletion.")
         raise HTTPException(status_code=400, detail="Invalid dataset ID format")
         
     dataset = db.query(Dataset).filter(Dataset.id == dataset_uuid, Dataset.user_id == current_user.id).first()
     if not dataset:
+        log_application_error(db, current_user.id, f"/api/datasets/{dataset_id}", "NotFoundError", "Dataset not found for deletion.")
         raise HTTPException(status_code=404, detail="Dataset not found")
     
+    filename = dataset.filename
     if os.path.exists(dataset.file_path):
         try:
             os.remove(dataset.file_path)
-        except Exception:
-            pass
+        except Exception as e:
+            log_application_error(db, current_user.id, f"/api/datasets/{dataset_id}", "DiskFileDeletionError", f"Failed to delete physical file: {str(e)}")
             
-    db.delete(dataset)
-    db.commit()
+    try:
+        db.delete(dataset)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        log_application_error(db, current_user.id, f"/api/datasets/{dataset_id}", "DatabaseDeletionError", f"Failed to delete record: {str(e)}")
+        raise HTTPException(status_code=500, detail="Database deletion error")
+        
+    log_user_activity(db, current_user.id, "Delete", f"Deleted dataset '{filename}' successfully (ID: {dataset_id})")
     return {"message": "Dataset deleted successfully"}
 
 @router.put("/{dataset_id}/rename")
@@ -219,8 +261,12 @@ def prepare_dataset(
         dataset.column_count = col_count
         dataset.status = "Prepared"
         
-        # Clear cached profiling summaries
+        # Clear cached profiling summaries, insights and forecasts
+        from app.models.dataset_insight import DatasetInsight
+        from app.models.dataset_forecast import DatasetForecast
         db.query(DatasetProfile).filter(DatasetProfile.dataset_id == dataset.id).delete()
+        db.query(DatasetInsight).filter(DatasetInsight.dataset_id == dataset.id).delete()
+        db.query(DatasetForecast).filter(DatasetForecast.dataset_id == dataset.id).delete()
         db.commit()
         
         preview = sanitize_nans({
@@ -661,7 +707,12 @@ async def get_dashboard(
 ):
     import json
     
-    dataset = db.query(Dataset).filter(Dataset.id == id, Dataset.user_id == current_user.id).first()
+    try:
+        dataset_uuid = uuid.UUID(id) if isinstance(id, str) else id
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid dataset ID format")
+        
+    dataset = db.query(Dataset).filter(Dataset.id == dataset_uuid, Dataset.user_id == current_user.id).first()
     if not dataset:
         raise HTTPException(status_code=404, detail="Dataset not found")
         
@@ -844,10 +895,21 @@ async def get_dashboard(
     # For speed, I'll let frontend call /kpis to get the KPIs, and this endpoint returns charts.
     
     return sanitize_nans({
+        "id": str(dashboard.id),
         "dataset_category": category,
         "dashboard_name": dashboard.dashboard_name,
         "layout_json": dashboard.layout_json,
-        "charts": charts
+        "charts": charts,
+        "theme": dashboard.theme,
+        "description": dashboard.description,
+        "share_enabled": dashboard.share_enabled,
+        "share_token": dashboard.share_token,
+        "share_type": dashboard.share_type,
+        "expires_at": dashboard.expires_at.isoformat() if dashboard.expires_at else None,
+        "view_count": dashboard.view_count,
+        "unique_visitors": dashboard.unique_visitors,
+        "first_viewed_at": dashboard.first_viewed_at.isoformat() if dashboard.first_viewed_at else None,
+        "last_viewed_at": dashboard.last_viewed_at.isoformat() if dashboard.last_viewed_at else None
     })
 
 class SaveLayoutRequest(BaseModel):
@@ -863,18 +925,28 @@ def save_dashboard_layout(
     try:
         dataset_uuid = uuid.UUID(dataset_id)
     except ValueError:
+        log_application_error(db, current_user.id, f"/api/datasets/{dataset_id}/dashboard/layout", "InvalidIDError", "Invalid dataset ID format on saving dashboard layout.")
         raise HTTPException(status_code=400, detail="Invalid dataset ID format")
         
     dataset = db.query(Dataset).filter(Dataset.id == dataset_uuid, Dataset.user_id == current_user.id).first()
     if not dataset:
+        log_application_error(db, current_user.id, f"/api/datasets/{dataset_id}/dashboard/layout", "NotFoundError", "Dataset not found on saving dashboard layout.")
         raise HTTPException(status_code=404, detail="Dataset not found")
         
     dashboard = db.query(Dashboard).filter(Dashboard.dataset_id == dataset.id).first()
     if not dashboard:
+        log_application_error(db, current_user.id, f"/api/datasets/{dataset_id}/dashboard/layout", "NotFoundError", "Dashboard record not found on saving layout.")
         raise HTTPException(status_code=404, detail="Dashboard not found")
         
-    dashboard.layout_json = layout_req.layout_json
-    db.commit()
+    try:
+        dashboard.layout_json = layout_req.layout_json
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        log_application_error(db, current_user.id, f"/api/datasets/{dataset_id}/dashboard/layout", "DatabaseSaveError", f"Failed to save layout: {str(e)}")
+        raise HTTPException(status_code=500, detail="Database layout write failure.")
+        
+    log_user_activity(db, current_user.id, "Dashboard Updates", f"Saved layout configuration for dashboard (ID: {dashboard.id}) of dataset '{dataset.filename}'")
     return {"message": "Layout saved successfully"}
 
 def detect_columns(df: pd.DataFrame):
@@ -949,7 +1021,12 @@ async def get_dataset_kpis(
     import json
     from datetime import datetime
     
-    dataset = db.query(Dataset).filter(Dataset.id == id, Dataset.user_id == current_user.id).first()
+    try:
+        dataset_uuid = uuid.UUID(id) if isinstance(id, str) else id
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid dataset ID format")
+        
+    dataset = db.query(Dataset).filter(Dataset.id == dataset_uuid, Dataset.user_id == current_user.id).first()
     if not dataset:
         raise HTTPException(status_code=404, detail="Dataset not found")
         
@@ -1080,26 +1157,35 @@ def update_dashboard_metadata(
     try:
         dataset_uuid = uuid.UUID(dataset_id)
     except ValueError:
+        log_application_error(db, current_user.id, f"/api/datasets/{dataset_id}/dashboard/metadata", "InvalidIDError", "Invalid dataset ID format on updating metadata.")
         raise HTTPException(status_code=400, detail="Invalid dataset ID format")
 
     dataset = db.query(Dataset).filter(Dataset.id == dataset_uuid, Dataset.user_id == current_user.id).first()
     if not dataset:
+        log_application_error(db, current_user.id, f"/api/datasets/{dataset_id}/dashboard/metadata", "NotFoundError", "Dataset not found on updating dashboard metadata.")
         raise HTTPException(status_code=404, detail="Dataset not found")
 
     dashboard = db.query(Dashboard).filter(Dashboard.dataset_id == dataset.id).first()
     if not dashboard:
+        log_application_error(db, current_user.id, f"/api/datasets/{dataset_id}/dashboard/metadata", "NotFoundError", "Dashboard not found on metadata update.")
         raise HTTPException(status_code=404, detail="Dashboard not found. Generate dashboard first.")
 
-    if meta_req.dashboard_name is not None:
-        dashboard.dashboard_name = meta_req.dashboard_name
-    if meta_req.description is not None:
-        dashboard.description = meta_req.description
-    if meta_req.theme is not None:
-        dashboard.theme = meta_req.theme
+    try:
+        if meta_req.dashboard_name is not None:
+            dashboard.dashboard_name = meta_req.dashboard_name
+        if meta_req.description is not None:
+            dashboard.description = meta_req.description
+        if meta_req.theme is not None:
+            dashboard.theme = meta_req.theme
 
-    db.commit()
-    db.refresh(dashboard)
+        db.commit()
+        db.refresh(dashboard)
+    except Exception as e:
+        db.rollback()
+        log_application_error(db, current_user.id, f"/api/datasets/{dataset_id}/dashboard/metadata", "DatabaseWriteError", f"Failed to update metadata: {str(e)}")
+        raise HTTPException(status_code=500, detail="Database write failure.")
 
+    log_user_activity(db, current_user.id, "Dashboard Updates", f"Updated metadata parameters (Name: '{dashboard.dashboard_name}') for dashboard ID {dashboard.id}")
     return {
         "message": "Dashboard metadata updated",
         "dashboard_name": dashboard.dashboard_name,

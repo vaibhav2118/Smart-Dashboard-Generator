@@ -6,7 +6,7 @@ import {
     LayoutDashboard, ArrowLeft, Loader2, AlertCircle, ShieldCheck, RefreshCw,
     Brain, FileText, LineChart, Settings2, Copy, X, Download, Save,
     Sun, Moon, Monitor, Edit3, BarChart3, Check, FileDown, FileJson,
-    FileSpreadsheet, Image
+    FileSpreadsheet, Image, Share2, Globe, Calendar, Users, Key, ExternalLink, RefreshCcw
 } from 'lucide-react';
 import KpiCard from '../components/KpiCard';
 import html2canvas from 'html2canvas';
@@ -45,6 +45,25 @@ const DashboardStudio = () => {
     const [description, setDescription] = useState('');
     const [editingMeta, setEditingMeta] = useState(false);
 
+    // Sharing & Expiration States
+    const [showShareModal, setShowShareModal] = useState(false);
+    const [shareEnabled, setShareEnabled] = useState(false);
+    const [shareType, setShareType] = useState('live');
+    const [expiresOption, setExpiresOption] = useState('never');
+    const [customExpiry, setCustomExpiry] = useState('');
+    const [sharePassword, setSharePassword] = useState('');
+    const [shareToken, setShareToken] = useState('');
+    const [expiresAt, setExpiresAt] = useState(null);
+    const [shareLoading, setShareLoading] = useState(false);
+    const [copySuccess, setCopySuccess] = useState(false);
+    const [copyEmbedSuccess, setCopyEmbedSuccess] = useState(false);
+
+    // Analytics States
+    const [viewCount, setViewCount] = useState(0);
+    const [uniqueVisitors, setUniqueVisitors] = useState(0);
+    const [firstViewedAt, setFirstViewedAt] = useState(null);
+    const [lastViewedAt, setLastViewedAt] = useState(null);
+
     // Chart widgets (from backend + additions)
     const [widgets, setWidgets] = useState([]);
 
@@ -80,6 +99,16 @@ const DashboardStudio = () => {
             setDescription(dash.description || '');
             setTheme(dash.theme || 'dark');
             setKpiData(kpiRes.data);
+            
+            // Populate sharing config & analytics
+            setShareEnabled(dash.share_enabled || false);
+            setShareToken(dash.share_token || '');
+            setShareType(dash.share_type || 'live');
+            setExpiresAt(dash.expires_at || null);
+            setViewCount(dash.view_count || 0);
+            setUniqueVisitors(dash.unique_visitors || 0);
+            setFirstViewedAt(dash.first_viewed_at || null);
+            setLastViewedAt(dash.last_viewed_at || null);
             // Map backend charts to widgets
             const mapped = (dash.charts || []).map((c, i) => ({
                 id: c.id || `chart_${i}`,
@@ -124,6 +153,92 @@ const DashboardStudio = () => {
             setTimeout(() => setSaveMsg(null), 3000);
         } finally {
             setSaving(false);
+        }
+    };
+
+    const handleSaveShareConfig = async () => {
+        setShareLoading(true);
+        try {
+            const token = localStorage.getItem('token');
+            const headers = { 'Authorization': `Bearer ${token}` };
+            
+            const payload = {
+                share_type: shareType,
+                expires_option: expiresOption,
+                expires_at: expiresOption === 'custom' ? customExpiry : null,
+                password: sharePassword
+            };
+            
+            const dashboardId = dashboardData?.id;
+            const res = await axios.post(`http://localhost:8000/api/dashboards/${dashboardId}/share`, payload, { headers });
+            
+            setShareEnabled(true);
+            setShareToken(res.data.token);
+            setExpiresAt(res.data.expires_at);
+            setShareType(res.data.share_type);
+            setSaveMsg('Share Active!');
+            setTimeout(() => setSaveMsg(null), 3000);
+        } catch (e) {
+            console.error('Failed to configure share link', e);
+        } finally {
+            setShareLoading(false);
+        }
+    };
+
+    const handleDisableShare = async () => {
+        setShareLoading(true);
+        try {
+            const token = localStorage.getItem('token');
+            const headers = { 'Authorization': `Bearer ${token}` };
+            const dashboardId = dashboardData?.id;
+            
+            await axios.delete(`http://localhost:8000/api/dashboards/${dashboardId}/share`, { headers });
+            
+            setShareEnabled(false);
+            setShareToken('');
+            setExpiresAt(null);
+            setSharePassword('');
+        } catch (e) {
+            console.error('Failed to disable share link', e);
+        } finally {
+            setShareLoading(false);
+        }
+    };
+
+    const handleDisableAllShares = async () => {
+        setShareLoading(true);
+        try {
+            const token = localStorage.getItem('token');
+            const headers = { 'Authorization': `Bearer ${token}` };
+            
+            await axios.post(`http://localhost:8000/api/dashboards/share/disable-all`, {}, { headers });
+            
+            setShareEnabled(false);
+            setShareToken('');
+            setExpiresAt(null);
+            setSharePassword('');
+        } catch (e) {
+            console.error('Failed to disable all share links', e);
+        } finally {
+            setShareLoading(false);
+        }
+    };
+
+    const handleRegenerateShare = async () => {
+        setShareLoading(true);
+        try {
+            const token = localStorage.getItem('token');
+            const headers = { 'Authorization': `Bearer ${token}` };
+            const dashboardId = dashboardData?.id;
+            
+            const res = await axios.post(`http://localhost:8000/api/dashboards/${dashboardId}/share/regenerate`, {}, { headers });
+            
+            setShareToken(res.data.token);
+            setExpiresAt(res.data.expires_at);
+        } catch (e) {
+            console.error('Failed to regenerate share link', e);
+        } finally {
+            setShareLoading(false);
         }
     };
 
@@ -272,6 +387,13 @@ const DashboardStudio = () => {
                                 </button>
                             ))}
                         </div>
+
+                        {/* Share */}
+                        <button onClick={() => setShowShareModal(true)}
+                            className="flex items-center gap-2 px-3 py-2 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-indigo-600 hover:text-white rounded-xl text-xs font-bold transition">
+                            <Share2 size={14} />
+                            Share
+                        </button>
 
                         {/* Save */}
                         <button onClick={() => saveLayout()} disabled={saving}
@@ -436,6 +558,228 @@ const DashboardStudio = () => {
                     </div>
                 )}
             </div>
+
+            {/* Share Settings Modal */}
+            {showShareModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+                    <div className="w-full max-w-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+                        {/* Modal Header */}
+                        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950">
+                            <div className="flex items-center gap-2">
+                                <Globe className="text-indigo-500" size={18} />
+                                <h2 className="font-extrabold text-sm text-slate-800 dark:text-white uppercase tracking-wider">Dashboard Share Settings</h2>
+                            </div>
+                            <button onClick={() => setShowShareModal(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition">
+                                <X size={18} />
+                            </button>
+                        </div>
+                        
+                        {/* Modal Body */}
+                        <div className="p-6 overflow-y-auto space-y-6 text-slate-700 dark:text-slate-300">
+                            {/* Toggle & Options */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                {/* Left Side Configuration */}
+                                <div className="space-y-4">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-xs font-bold uppercase text-slate-400">Enable Sharing</span>
+                                        <button 
+                                            onClick={() => {
+                                                if (shareEnabled) handleDisableShare();
+                                                else handleSaveShareConfig();
+                                            }}
+                                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${shareEnabled ? 'bg-indigo-600' : 'bg-slate-200 dark:bg-slate-700'}`}
+                                        >
+                                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${shareEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                                        </button>
+                                    </div>
+                                    
+                                    <div className="space-y-2">
+                                        <span className="text-[10px] font-bold uppercase text-slate-400">Share Mode</span>
+                                        <div className="flex gap-2">
+                                            {['live', 'snapshot'].map(type => (
+                                                <button 
+                                                    key={type}
+                                                    type="button"
+                                                    onClick={() => setShareType(type)}
+                                                    className={`flex-1 py-2 px-3 text-xs font-bold rounded-xl border transition ${shareType === type ? 'border-indigo-500 bg-indigo-50/20 text-indigo-500' : 'border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+                                                >
+                                                    {type.toUpperCase()}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <span className="text-[10px] font-bold uppercase text-slate-400">Expiration</span>
+                                        <select 
+                                            value={expiresOption}
+                                            onChange={e => setExpiresOption(e.target.value)}
+                                            className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl focus:outline-none focus:border-indigo-500"
+                                        >
+                                            <option value="never">Never Expire</option>
+                                            <option value="24h">24 Hours</option>
+                                            <option value="7d">7 Days</option>
+                                            <option value="30d">30 Days</option>
+                                            <option value="custom">Custom Date/Time</option>
+                                        </select>
+                                        
+                                        {expiresOption === 'custom' && (
+                                            <input 
+                                                type="datetime-local"
+                                                value={customExpiry}
+                                                onChange={e => setCustomExpiry(e.target.value)}
+                                                className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl focus:outline-none focus:border-indigo-500 mt-2 text-slate-700 dark:text-slate-350"
+                                            />
+                                        )}
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <div className="flex items-center gap-1.5">
+                                            <Key size={12} className="text-slate-400" />
+                                            <span className="text-[10px] font-bold uppercase text-slate-400">Password Protection (Optional)</span>
+                                        </div>
+                                        <input 
+                                            type="password"
+                                            value={sharePassword}
+                                            onChange={e => setSharePassword(e.target.value)}
+                                            placeholder="Enter passcode to protect link..."
+                                            className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl focus:outline-none focus:border-indigo-500"
+                                        />
+                                    </div>
+                                    
+                                    <div className="pt-2 flex flex-col gap-2">
+                                        <button 
+                                            type="button"
+                                            onClick={handleSaveShareConfig}
+                                            disabled={shareLoading}
+                                            className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs transition disabled:opacity-50"
+                                        >
+                                            {shareEnabled ? 'Update Share Settings' : 'Generate Share Link'}
+                                        </button>
+                                        <button 
+                                            type="button"
+                                            onClick={handleDisableAllShares}
+                                            disabled={shareLoading}
+                                            className="w-full py-2 border border-red-500 text-red-500 hover:bg-red-500 hover:text-white font-bold rounded-xl text-xs transition disabled:opacity-50"
+                                        >
+                                            Disable All Active Links
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                {/* Right Side Analytics & Actions */}
+                                <div className="space-y-4 border-t md:border-t-0 md:border-l border-slate-200 dark:border-slate-800 pt-4 md:pt-0 md:pl-6">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <Users className="text-slate-400" size={14} />
+                                        <span className="text-xs font-bold uppercase text-slate-400">Share Analytics</span>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4 text-center">
+                                        <div className="p-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl">
+                                            <span className="block text-[10px] uppercase font-semibold text-slate-400">Total Views</span>
+                                            <span className="block font-extrabold text-lg text-indigo-500 mt-1">{viewCount}</span>
+                                        </div>
+                                        <div className="p-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl">
+                                            <span className="block text-[10px] uppercase font-semibold text-slate-400">Unique Visitors</span>
+                                            <span className="block font-extrabold text-lg text-emerald-500 mt-1">{uniqueVisitors}</span>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="space-y-1.5 text-xs text-slate-450">
+                                        <div className="flex justify-between">
+                                            <span>First Viewed:</span>
+                                            <span className="font-semibold text-slate-700 dark:text-slate-350">
+                                                {firstViewedAt ? new Date(firstViewedAt).toLocaleDateString() : 'Never'}
+                                            </span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                            <span>Last Viewed:</span>
+                                            <span className="font-semibold text-slate-700 dark:text-slate-350">
+                                                {lastViewedAt ? new Date(lastViewedAt).toLocaleDateString() : 'Never'}
+                                            </span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                            <span>Expiration:</span>
+                                            <span className="font-semibold text-indigo-400">
+                                                {expiresAt ? new Date(expiresAt).toLocaleString() : 'Never'}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    {shareEnabled && shareToken && (
+                                        <div className="space-y-4 pt-2">
+                                            {/* Link Display */}
+                                            <div className="space-y-1.5">
+                                                <span className="text-[10px] font-bold uppercase text-slate-400">Public Link</span>
+                                                <div className="flex items-center gap-1.5 p-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl">
+                                                    <input 
+                                                        readOnly 
+                                                        value={`http://localhost:5173/share/${shareToken}`}
+                                                        className="flex-1 bg-transparent text-xs text-indigo-500 font-semibold focus:outline-none truncate"
+                                                    />
+                                                    <button 
+                                                        type="button"
+                                                        onClick={() => {
+                                                            navigator.clipboard.writeText(`http://localhost:5173/share/${shareToken}`);
+                                                            setCopySuccess(true);
+                                                            setTimeout(() => setCopySuccess(false), 2000);
+                                                        }}
+                                                        className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-lg text-slate-450 hover:text-indigo-500 transition"
+                                                        title="Copy Link"
+                                                    >
+                                                        {copySuccess ? <Check size={14} className="text-emerald-500" /> : <Copy size={14} />}
+                                                    </button>
+                                                    <a 
+                                                        href={`http://localhost:5173/share/${shareToken}`}
+                                                        target="_blank"
+                                                        rel="noreferrer"
+                                                        className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-lg text-slate-455 hover:text-indigo-500 transition"
+                                                    >
+                                                        <ExternalLink size={14} />
+                                                    </a>
+                                                </div>
+                                            </div>
+
+                                            {/* Embed Iframe Display */}
+                                            <div className="space-y-1.5">
+                                                <span className="text-[10px] font-bold uppercase text-slate-400">Embed iframe Code</span>
+                                                <div className="flex items-center gap-1.5 p-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl">
+                                                    <input 
+                                                        readOnly 
+                                                        value={`<iframe src="http://localhost:5173/share/${shareToken}" width="100%" height="600" style="border:none;"></iframe>`}
+                                                        className="flex-1 bg-transparent text-xs text-slate-550 font-mono focus:outline-none truncate"
+                                                    />
+                                                    <button 
+                                                        type="button"
+                                                        onClick={() => {
+                                                            navigator.clipboard.writeText(`<iframe src="http://localhost:5173/share/${shareToken}" width="100%" height="600" style="border:none;"></iframe>`);
+                                                            setCopyEmbedSuccess(true);
+                                                            setTimeout(() => setCopyEmbedSuccess(false), 2000);
+                                                        }}
+                                                        className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-lg text-slate-455 hover:text-indigo-500 transition"
+                                                        title="Copy Embed Code"
+                                                    >
+                                                        {copyEmbedSuccess ? <Check size={14} className="text-emerald-500" /> : <Copy size={14} />}
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            
+                                            {/* Regenerate Trigger */}
+                                            <button 
+                                                type="button"
+                                                onClick={handleRegenerateShare}
+                                                disabled={shareLoading}
+                                                className="flex items-center justify-center gap-1.5 w-full py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-850 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold rounded-xl text-[11px] transition"
+                                            >
+                                                <RefreshCcw size={12} /> Regenerate Share Link
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

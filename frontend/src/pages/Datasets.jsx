@@ -78,10 +78,23 @@ const Datasets = () => {
 
     const allDatasets = [...demoItems, ...formattedDbItems].filter(item => !deletedIds.includes(item.id));
 
-    // Handle session delete simulation
-    const handleDelete = (id, filename) => {
+    // Handle deletion
+    const handleDelete = async (id, filename) => {
         if (confirm(`Are you sure you want to delete dataset "${filename}"?`)) {
-            setDeletedIds(prev => [...prev, id]);
+            if (String(id).startsWith('demo-')) {
+                setDeletedIds(prev => [...prev, id]);
+            } else {
+                try {
+                    const token = localStorage.getItem('token');
+                    await axios.delete(`http://localhost:8000/api/datasets/${id}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    setDbDatasets(prev => prev.filter(item => item.id !== id));
+                } catch (err) {
+                    console.error("Failed to delete dataset:", err);
+                    alert("Failed to delete dataset from backend.");
+                }
+            }
             // If active dataset is deleted, clear activeDatasetId from local storage
             if (localStorage.getItem('activeDatasetId') === String(id)) {
                 localStorage.removeItem('activeDatasetId');

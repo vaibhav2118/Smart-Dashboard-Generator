@@ -27,3 +27,13 @@ frontend/node_modules/
 *.sln
 *.sw?
 .DS_Store
+
+# Databases
+*.db
+smartdg.db
+backend/smartdg.db
+
+# Uploads and reports
+backend/uploads/
+uploads/
+

@@ -47,3 +47,53 @@ def update_user_settings(
     db.commit()
     db.refresh(settings)
     return settings
+
+import os
+from app.models.dataset import Dataset
+from app.models.report import Report
+from app.models.dataset_forecast import DatasetForecast
+from app.models.dataset_insight import DatasetInsight
+
+@router.get("/storage")
+def get_storage_metrics(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # 1. Dataset Count
+    datasets = db.query(Dataset).filter(Dataset.user_id == current_user.id).all()
+    dataset_count = len(datasets)
+    
+    # 2. Report Count
+    reports = db.query(Report).filter(Report.user_id == current_user.id).all()
+    report_count = len(reports)
+    
+    # 3. Forecast Cache Size (number of forecasts cached)
+    dataset_ids = [d.id for d in datasets]
+    forecast_count = db.query(DatasetForecast).filter(DatasetForecast.dataset_id.in_(dataset_ids)).count() if dataset_ids else 0
+    
+    # 4. Insight Cache Size (number of insights cached)
+    insight_count = db.query(DatasetInsight).filter(DatasetInsight.dataset_id.in_(dataset_ids)).count() if dataset_ids else 0
+    
+    # 5. Disk Usage (sum of file sizes on disk)
+    total_disk_usage = 0
+    for d in datasets:
+        if d.file_path and os.path.exists(d.file_path):
+            try:
+                total_disk_usage += os.path.getsize(d.file_path)
+            except Exception:
+                pass
+                
+    for r in reports:
+        if r.report_path and os.path.exists(r.report_path):
+            try:
+                total_disk_usage += os.path.getsize(r.report_path)
+            except Exception:
+                pass
+                
+    return {
+        "dataset_count": dataset_count,
+        "report_count": report_count,
+        "forecast_cache_size": forecast_count,
+        "insight_cache_size": insight_count,
+        "disk_usage": total_disk_usage
+    }

@@ -12,7 +12,8 @@ import {
     LogOut, 
     ChevronLeft, 
     ChevronRight,
-    X
+    X,
+    Sparkles
 } from 'lucide-react';
 
 const Sidebar = ({ isCollapsed, toggleCollapse, mobileOpen, setMobileOpen }) => {
@@ -28,6 +29,7 @@ const Sidebar = ({ isCollapsed, toggleCollapse, mobileOpen, setMobileOpen }) => 
         { path: `/analysis/${activeDatasetId}`, label: 'Analysis', icon: BarChart3 },
         { path: `/insights/${activeDatasetId}`, label: 'AI Insights', icon: Brain },
         { path: `/forecast/${activeDatasetId}`, label: 'Forecasting', icon: LineChart },
+        { path: `/chat/${activeDatasetId}`, label: 'AI Copilot', icon: Sparkles },
         { path: '/reports', label: 'Reports', icon: FileText },
         { path: '/settings', label: 'Settings', icon: Settings },
     ];
