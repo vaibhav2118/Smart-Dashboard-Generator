@@ -5,6 +5,7 @@ import { getDataset } from '../utils/demoData';
 import { ThemeContext } from '../context/ThemeContext';
 import { useDataset } from '../context/DatasetContext';
 import DatasetSelector from '../components/DatasetSelector';
+import DatasetLifecycleRibbon from '../components/DatasetLifecycleRibbon';
 import Plot from '../components/Plot';
 import { 
     LineChart, 
@@ -297,7 +298,9 @@ const Forecasting = () => {
                 </button>
             </div>
 
-            {/* Error banner */}
+            <DatasetLifecycleRibbon />
+
+            {/* Controls Row */}
             {error && (
                 <div className="flex items-center gap-3 p-4 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/40 rounded-xl text-red-700 dark:text-red-400">
                     <AlertCircle size={20} className="shrink-0" />

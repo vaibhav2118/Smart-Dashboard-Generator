@@ -4,6 +4,7 @@ import axios from 'axios';
 import Plot from 'react-plotly.js';
 import { useDataset } from '../context/DatasetContext';
 import DatasetSelector from '../components/DatasetSelector';
+import DatasetLifecycleRibbon from '../components/DatasetLifecycleRibbon';
 import {
     LayoutDashboard, ArrowLeft, Loader2, AlertCircle, ShieldCheck, RefreshCw,
     Brain, FileText, LineChart, Settings2, Copy, X, Download, Save,
@@ -72,6 +73,12 @@ const DashboardStudio = () => {
 
     // Config panel
     const [configWidget, setConfigWidget] = useState(null); // index
+    const [aiMenuWidget, setAiMenuWidget] = useState(null); // index
+
+    const handleAiAction = (widget, action) => {
+        const initialMessage = `${action} for ${widget.title}`;
+        navigate(`/chat/${datasetId}?widget_id=${widget.id}&initial_message=${encodeURIComponent(initialMessage)}`);
+    };
 
     const T = THEMES[theme] || THEMES.dark;
 
@@ -455,6 +462,10 @@ const DashboardStudio = () => {
                 </div>
             </div>
 
+            <div className="px-6 pt-4">
+                <DatasetLifecycleRibbon />
+            </div>
+
             {/* Dashboard Canvas */}
             <div ref={dashboardRef} className="p-6 space-y-6">
                 {/* KPI Row */}
@@ -478,8 +489,14 @@ const DashboardStudio = () => {
                                     {widget.title}
                                 </h3>
                                 <div className="flex items-center gap-1">
-                                    <button onClick={() => setConfigWidget(configWidget === idx ? null : idx)}
-                                        className={`p-1.5 rounded-lg transition ${configWidget === idx ? 'bg-indigo-600 text-white' : ''}`}
+                                    <button onClick={() => { setAiMenuWidget(aiMenuWidget === idx ? null : idx); setConfigWidget(null); }}
+                                        className={`p-1.5 rounded-lg transition ${aiMenuWidget === idx ? 'bg-indigo-600 text-white' : 'hover:bg-indigo-50 dark:hover:bg-indigo-900/30'}`}
+                                        style={{ color: aiMenuWidget === idx ? 'white' : T.subtext }}
+                                        title="Explain With AI">
+                                        <Brain size={14} className={aiMenuWidget === idx ? "text-white" : "text-indigo-500"} />
+                                    </button>
+                                    <button onClick={() => { setConfigWidget(configWidget === idx ? null : idx); setAiMenuWidget(null); }}
+                                        className={`p-1.5 rounded-lg transition ${configWidget === idx ? 'bg-slate-600 text-white' : ''}`}
                                         style={{ color: configWidget === idx ? 'white' : T.subtext }}
                                         title="Configure">
                                         <Settings2 size={14} />
@@ -511,6 +528,26 @@ const DashboardStudio = () => {
                                         </select>
                                     </div>
                                     <p className="text-slate-400 italic">Chart axis configuration coming in next update.</p>
+                                </div>
+                            )}
+
+                            {/* AI Actions Panel (slide-in) */}
+                            {aiMenuWidget === idx && (
+                                <div className="px-4 py-3 border-b text-xs space-y-2"
+                                    style={{ background: T.bg, borderColor: T.border }}>
+                                    <p className="font-bold mb-2 flex items-center gap-1.5" style={{ color: T.text }}>
+                                        <Brain size={14} className="text-indigo-500" /> Explain with AI
+                                    </p>
+                                    <div className="flex flex-wrap gap-2">
+                                        {['Explain Trend', 'Explain Outliers', 'Explain Correlation', 'Business Impact'].map(action => (
+                                            <button key={action}
+                                                onClick={() => handleAiAction(widget, action)}
+                                                className="px-3 py-1.5 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 rounded-lg font-semibold transition border border-indigo-200 dark:border-indigo-800"
+                                            >
+                                                {action}
+                                            </button>
+                                        ))}
+                                    </div>
                                 </div>
                             )}
 

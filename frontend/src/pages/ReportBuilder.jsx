@@ -2,6 +2,8 @@ import { useEffect, useState, useRef, useContext } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
 import Plotly from 'plotly.js-dist-min';
+import { useDataset } from '../context/DatasetContext';
+import DatasetLifecycleRibbon from '../components/DatasetLifecycleRibbon';
 import { ThemeContext } from '../context/ThemeContext';
 import { 
     FileText, 
@@ -286,6 +288,8 @@ const ReportBuilder = () => {
                     View Report History <Clock size={16} />
                 </Link>
             </div>
+
+            <DatasetLifecycleRibbon />
 
             {error && (
                 <div className="flex items-center gap-3 p-4 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/40 rounded-xl text-red-700 dark:text-red-400">

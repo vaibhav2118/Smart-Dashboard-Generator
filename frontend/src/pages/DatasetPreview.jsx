@@ -159,6 +159,12 @@ const DatasetPreview = () => {
                 </div>
                 <div className="flex flex-wrap gap-2">
                     <Link
+                        to={`/command-center/${id}`}
+                        className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold shadow-md transition"
+                    >
+                        Open Command Center
+                    </Link>
+                    <Link
                         to="/dashboard"
                         className="px-4 py-2 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl text-sm font-semibold transition"
                     >

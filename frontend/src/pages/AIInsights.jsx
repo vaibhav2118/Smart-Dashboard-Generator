@@ -4,6 +4,7 @@ import axios from 'axios';
 import { getDataset } from '../utils/demoData';
 import { useDataset } from '../context/DatasetContext';
 import DatasetSelector from '../components/DatasetSelector';
+import DatasetLifecycleRibbon from '../components/DatasetLifecycleRibbon';
 import { 
     Brain, 
     Sparkles, 
@@ -180,6 +181,8 @@ const AIInsights = () => {
                     Run Forecasting <ArrowRight size={16} />
                 </button>
             </div>
+
+            <DatasetLifecycleRibbon />
 
             {/* Error notifications */}
             {error && (

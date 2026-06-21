@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
 import { getDataset } from '../utils/demoData';
 import { ThemeContext } from '../context/ThemeContext';
+import DatasetLifecycleRibbon from '../components/DatasetLifecycleRibbon';
 import Plot from '../components/Plot';
 import { 
     BarChart3, 
@@ -461,6 +462,8 @@ const DataProfiling = () => {
                     Generate AI Insights <ArrowRight size={16} />
                 </button>
             </div>
+
+            <DatasetLifecycleRibbon />
 
             {/* Health Score Banner */}
             <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 flex flex-col md:flex-row items-center justify-between gap-6 shadow-sm">

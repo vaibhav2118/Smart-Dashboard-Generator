@@ -19,7 +19,8 @@ import DataPreparation from './pages/DataPreparation';
 import ReportBuilder from './pages/ReportBuilder';
 import PublicDashboard from './pages/PublicDashboard';
 import Chat from './pages/Chat';
-
+import CommandCenter from './pages/CommandCenter';
+import ExecutiveBrief from './pages/ExecutiveBrief';
 
 const ProtectedRoute = ({ children }) => {
   const { user, loading } = useContext(AuthContext);
@@ -63,6 +64,8 @@ function App() {
         <Route path="/dashboard/:datasetId" element={<DashboardStudio />} />
         <Route path="/report-builder/:datasetId" element={<ReportBuilder />} />
         <Route path="/chat/:datasetId" element={<Chat />} />
+        <Route path="/command-center/:datasetId" element={<CommandCenter />} />
+        <Route path="/executive-brief/:datasetId" element={<ExecutiveBrief />} />
       </Route>
 
       {/* Fallback Catch-all */}

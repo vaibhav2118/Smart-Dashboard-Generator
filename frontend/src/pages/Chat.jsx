@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import {
     Brain, MessageSquare, Send, Plus, Trash2, Edit3, Check, X, Loader2,
@@ -9,6 +9,7 @@ import {
 import { getDataset } from '../utils/demoData';
 import { useDataset } from '../context/DatasetContext';
 import DatasetSelector from '../components/DatasetSelector';
+import DatasetLifecycleRibbon from '../components/DatasetLifecycleRibbon';
 
 const SUGGESTIONS = [
     "Why is revenue changing?",
@@ -24,13 +25,13 @@ const SUGGESTIONS = [
 const Chat = () => {
     const { datasetId } = useParams();
     const navigate = useNavigate();
+    const [searchParams, setSearchParams] = useSearchParams();
     const { setActiveDataset } = useDataset();
     
     // Dataset metadata
     const [dataset, setDataset] = useState(null);
 
     // Guard: demo datasets cannot use the Chat API (requires real UUID)
-    const isDemo = datasetId?.startsWith('demo-');
     
     // Sessions & Messages state
     const [sessions, setSessions] = useState([]);
@@ -47,6 +48,9 @@ const Chat = () => {
     // Inline Rename session state
     const [editingSessionId, setEditingSessionId] = useState(null);
     const [renameTitle, setRenameTitle] = useState('');
+    const [initialProcessed, setInitialProcessed] = useState(false);
+
+    const isDemo = String(datasetId).startsWith('demo-');
 
     const messagesEndRef = useRef(null);
 
@@ -133,9 +137,22 @@ const Chat = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages, sending]);
 
+    // Handle initial_message parameter for AI Explain actions
+    useEffect(() => {
+        const initialMessage = searchParams.get('initial_message');
+        const widgetId = searchParams.get('widget_id');
+        if (initialMessage && !initialProcessed && !loadingSessions && sessions !== null && !isDemo) {
+            setInitialProcessed(true);
+            setTimeout(() => {
+                handleSendMessage(initialMessage, widgetId);
+                setSearchParams({}, { replace: true });
+            }, 500);
+        }
+    }, [searchParams, initialProcessed, loadingSessions, sessions, isDemo, setSearchParams]);
+
     // Send a message
-    const handleSendMessage = async (textToSend) => {
-        const query = textToSend || input;
+    const handleSendMessage = async (textToSend, explicitWidgetId = null) => {
+        const query = typeof textToSend === 'string' ? textToSend : input;
         if (!query.trim() || sending) return;
 
         setInput('');
@@ -154,7 +171,8 @@ const Chat = () => {
         try {
             const payload = {
                 message: query,
-                session_id: activeSessionId || null
+                session_id: activeSessionId || null,
+                widget_id: explicitWidgetId || searchParams.get('widget_id') || undefined
             };
             const res = await axios.post(`http://localhost:8000/api/chat/${datasetId}`, payload, { headers: getHeaders() });
             
@@ -400,6 +418,10 @@ const Chat = () => {
                     >
                         <ArrowLeft size={12} /> Return Studio
                     </button>
+                </div>
+
+                <div className="px-6 pt-4 pb-0">
+                    <DatasetLifecycleRibbon />
                 </div>
 
                 {/* Messages feed */}
