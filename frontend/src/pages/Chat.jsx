@@ -1,11 +1,14 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
 import {
     Brain, MessageSquare, Send, Plus, Trash2, Edit3, Check, X, Loader2,
-    Sparkles, AlertCircle, RefreshCw, Bookmark, HelpCircle, ArrowLeft, ArrowRight
+    Sparkles, AlertCircle, RefreshCw, Bookmark, HelpCircle, ArrowLeft, ArrowRight,
+    Database
 } from 'lucide-react';
 import { getDataset } from '../utils/demoData';
+import { useDataset } from '../context/DatasetContext';
+import DatasetSelector from '../components/DatasetSelector';
 
 const SUGGESTIONS = [
     "Why is revenue changing?",
@@ -21,9 +24,13 @@ const SUGGESTIONS = [
 const Chat = () => {
     const { datasetId } = useParams();
     const navigate = useNavigate();
+    const { setActiveDataset } = useDataset();
     
     // Dataset metadata
     const [dataset, setDataset] = useState(null);
+
+    // Guard: demo datasets cannot use the Chat API (requires real UUID)
+    const isDemo = datasetId?.startsWith('demo-');
     
     // Sessions & Messages state
     const [sessions, setSessions] = useState([]);
@@ -50,6 +57,7 @@ const Chat = () => {
 
     // Load dataset info
     const loadDataset = useCallback(async () => {
+        if (isDemo) return; // demo datasets not supported in Chat
         try {
             const token = localStorage.getItem('token');
             const headers = { 'Authorization': `Bearer ${token}` };
@@ -57,11 +65,12 @@ const Chat = () => {
             const resolved = getDataset(datasetId, res.data);
             if (resolved) {
                 setDataset(resolved);
+                setActiveDataset(resolved); // sync global context
             }
         } catch (e) {
             console.error("Failed to load dataset details", e);
         }
-    }, [datasetId]);
+    }, [datasetId, isDemo, setActiveDataset]);
 
     // Load sessions
     const loadSessions = useCallback(async (selectFirst = false) => {
@@ -106,9 +115,11 @@ const Chat = () => {
 
     // Initial load
     useEffect(() => {
-        loadDataset();
-        loadSessions(true);
-    }, [datasetId]);
+        if (!isDemo) {
+            loadDataset();
+            loadSessions(true);
+        }
+    }, [datasetId, isDemo]);
 
     // Load messages when active session changes
     useEffect(() => {
@@ -213,6 +224,45 @@ const Chat = () => {
         setMessages(prev => prev.slice(0, -1));
         handleSendMessage(lastUserQuery);
     };
+
+    // Demo dataset guard screen
+    if (isDemo) {
+        const demoNames = {
+            'demo-sales': 'Sales_Performance_Q2.csv',
+            'demo-finance': 'Finance_Ledger_2026.xlsx',
+            'demo-hr': 'HR_Retention_Profile.csv',
+        };
+        return (
+            <div className="flex h-[calc(100vh-64px)] bg-slate-950 text-slate-100 items-center justify-center">
+                <div className="max-w-md text-center space-y-6 p-8">
+                    <div className="mx-auto w-16 h-16 bg-indigo-600/10 border border-indigo-500/30 rounded-3xl flex items-center justify-center text-indigo-400">
+                        <Brain size={32} />
+                    </div>
+                    <div className="space-y-2">
+                        <h2 className="text-xl font-extrabold text-white">AI Copilot Requires a Real Dataset</h2>
+                        <p className="text-sm text-slate-400 leading-relaxed">
+                            <span className="font-semibold text-indigo-400">{demoNames[datasetId] || datasetId}</span> is a demo dataset.
+                            AI Copilot can only analyse datasets that you have uploaded, as it queries your real data profile, KPIs, forecasts and insights.
+                        </p>
+                    </div>
+                    <div className="flex flex-col gap-3">
+                        <Link
+                            to="/datasets"
+                            className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-6 py-3 rounded-xl text-sm transition"
+                        >
+                            <Database size={16} /> Select a Real Dataset
+                        </Link>
+                        <Link
+                            to="/upload"
+                            className="flex items-center justify-center gap-2 border border-slate-700 hover:border-slate-600 text-slate-300 hover:text-white font-semibold px-6 py-3 rounded-xl text-sm transition"
+                        >
+                            Upload New Dataset
+                        </Link>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="flex h-[calc(100vh-64px)] bg-slate-950 text-slate-100 font-sans overflow-hidden">
@@ -327,11 +377,11 @@ const Chat = () => {
             <div className="flex-1 flex flex-col bg-slate-950">
                 {/* Chat Header */}
                 <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/10">
-                    <div className="flex items-center gap-3">
-                        <div className="p-2 bg-indigo-600/20 text-indigo-400 border border-indigo-500/20 rounded-2xl">
+                    <div className="flex items-center gap-3 min-w-0">
+                        <div className="p-2 bg-indigo-600/20 text-indigo-400 border border-indigo-500/20 rounded-2xl shrink-0">
                             <Brain size={18} />
                         </div>
-                        <div>
+                        <div className="min-w-0">
                             <h1 className="text-sm font-extrabold text-white flex items-center gap-1.5 uppercase tracking-wider">
                                 SmartDG Analytics Copilot
                             </h1>
@@ -339,10 +389,14 @@ const Chat = () => {
                                 {dataset ? `Context: ${dataset.filename} (${dataset.dataset_category})` : "Loading Dataset context..."}
                             </p>
                         </div>
+                        {/* Inline dataset switcher */}
+                        <div className="ml-2">
+                            <DatasetSelector currentId={datasetId} moduleBase="chat" variant="dark" />
+                        </div>
                     </div>
                     <button 
                         onClick={() => navigate(`/dashboard/${datasetId}`)}
-                        className="px-3 py-1.5 border border-slate-800 hover:border-slate-700 hover:bg-slate-900/50 rounded-xl text-slate-300 hover:text-white text-xs font-bold transition flex items-center gap-1.5"
+                        className="px-3 py-1.5 border border-slate-800 hover:border-slate-700 hover:bg-slate-900/50 rounded-xl text-slate-300 hover:text-white text-xs font-bold transition flex items-center gap-1.5 shrink-0"
                     >
                         <ArrowLeft size={12} /> Return Studio
                     </button>

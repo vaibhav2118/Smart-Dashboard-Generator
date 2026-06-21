@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
 import { getDataset } from '../utils/demoData';
+import { useDataset } from '../context/DatasetContext';
 import { 
     Database, 
     ArrowRight, 
@@ -22,6 +23,7 @@ import KpiCard from '../components/KpiCard';
 const DatasetPreview = () => {
     const { id } = useParams();
     const navigate = useNavigate();
+    const { setActiveDataset } = useDataset();
     const [dataset, setDataset] = useState(null);
     const [preview, setPreview] = useState(null);
     const [kpiData, setKpiData] = useState(null);
@@ -33,12 +35,15 @@ const DatasetPreview = () => {
             setLoading(true);
             setError(null);
             
-            localStorage.setItem('activeDatasetId', id);
+            // NOTE: Do NOT use raw localStorage.setItem here.
+            // setActiveDataset updates both context and localStorage cleanly.
 
             if (id && String(id).startsWith('demo-')) {
                 const demoData = getDataset(id);
                 if (demoData) {
                     setDataset(demoData);
+                    // Sync to global context (demo object)
+                    setActiveDataset({ id, filename: demoData.filename, isDemo: true });
                     setPreview({
                         columns: demoData.columns,
                         rows: demoData.rows
@@ -93,6 +98,7 @@ const DatasetPreview = () => {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 setDataset(metaRes.data);
+                setActiveDataset(metaRes.data); // sync global context
 
                 const previewRes = await axios.get(`http://localhost:8000/api/datasets/${id}/preview`, {
                     headers: { 'Authorization': `Bearer ${token}` }
@@ -285,25 +291,31 @@ const DatasetPreview = () => {
                         </p>
                     </Link>
 
-                    <div className="flex flex-col gap-2 p-5 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-xl opacity-50 cursor-not-allowed">
-                        <div className="flex items-center gap-2 font-bold text-sm text-slate-500">
+                    <Link
+                        to={`/forecast/${dataset.id}`}
+                        className="flex flex-col gap-2 p-5 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/20 dark:hover:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-xl transition"
+                    >
+                        <div className="flex items-center gap-2 font-bold text-sm text-amber-700 dark:text-amber-400">
                             <LineChart size={18} />
                             <span>Forecast Dataset</span>
                         </div>
-                        <p className="text-xs text-slate-400 leading-relaxed">
-                            Disabled. Coming soon.
+                        <p className="text-xs text-amber-600/70 dark:text-amber-400/70 leading-relaxed">
+                            Run ARIMA, Prophet, or Linear Regression forecasting models.
                         </p>
-                    </div>
+                    </Link>
                     
-                    <div className="flex flex-col gap-2 p-5 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-xl opacity-50 cursor-not-allowed">
-                        <div className="flex items-center gap-2 font-bold text-sm text-slate-500">
+                    <Link
+                        to={`/report-builder/${dataset.id}`}
+                        className="flex flex-col gap-2 p-5 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/20 dark:hover:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-xl transition"
+                    >
+                        <div className="flex items-center gap-2 font-bold text-sm text-blue-700 dark:text-blue-400">
                             <FileText size={18} />
                             <span>Generate Report</span>
                         </div>
-                        <p className="text-xs text-slate-400 leading-relaxed">
-                            Disabled. Coming soon.
+                        <p className="text-xs text-blue-600/70 dark:text-blue-400/70 leading-relaxed">
+                            Build a professional PDF report with insights, KPIs, and forecasts.
                         </p>
-                    </div>
+                    </Link>
                 </div>
             </div>
 

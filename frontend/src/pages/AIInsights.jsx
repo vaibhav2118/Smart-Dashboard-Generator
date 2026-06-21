@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
 import { getDataset } from '../utils/demoData';
+import { useDataset } from '../context/DatasetContext';
+import DatasetSelector from '../components/DatasetSelector';
 import { 
     Brain, 
     Sparkles, 
@@ -19,6 +21,7 @@ import {
 const AIInsights = () => {
     const { id } = useParams();
     const navigate = useNavigate();
+    const { setActiveDataset } = useDataset();
     const [dataset, setDataset] = useState(null);
     const [insight, setInsight] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -90,6 +93,7 @@ const AIInsights = () => {
                 return;
             }
             setDataset(resolved);
+            setActiveDataset(resolved); // sync global context
 
             // Fetch cached insights from backend
             try {
@@ -164,9 +168,13 @@ const AIInsights = () => {
                         </span>
                     </div>
                     <h1 className="text-3xl font-extrabold tracking-tight truncate mt-2">AI Insights Generator</h1>
+                    {/* Dataset switcher */}
+                    <div className="mt-2">
+                        <DatasetSelector currentId={id} moduleBase="insights" />
+                    </div>
                 </div>
                 <button
-                    onClick={() => navigate(`/forecast/${dataset.id}`)}
+                    onClick={() => navigate(`/forecast/${dataset?.id || id}`)}
                     className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-5 py-2.5 rounded-xl text-sm shadow-md hover:-translate-y-0.5 transition w-fit shrink-0"
                 >
                     Run Forecasting <ArrowRight size={16} />

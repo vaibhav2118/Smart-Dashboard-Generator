@@ -20,12 +20,49 @@ const DashboardHome = () => {
     const [datasets, setDatasets] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [insightsCount, setInsightsCount] = useState(null);
+    const [forecastCount, setForecastCount] = useState(null);
+    const [reportsCount, setReportsCount] = useState(null);
     const navigate = useNavigate();
     const { user } = useContext(AuthContext);
 
     useEffect(() => {
         fetchDatasets();
+        fetchCrossCounts();
     }, []);
+
+    const fetchCrossCounts = async () => {
+        try {
+            const token = localStorage.getItem('token');
+            const headers = { 'Authorization': `Bearer ${token}` };
+            // Fetch insights, forecasts, reports counts in parallel
+            const [reportsRes] = await Promise.allSettled([
+                axios.get('http://localhost:8000/api/reports/', { headers }),
+            ]);
+            if (reportsRes.status === 'fulfilled') {
+                setReportsCount(reportsRes.value.data.length);
+            }
+            // Datasets-level insight/forecast counts via the dataset list
+            const datasetsRes = await axios.get('http://localhost:8000/api/datasets/', { headers });
+            const ids = datasetsRes.data.map(d => d.id);
+            let insightTotal = 0;
+            let forecastTotal = 0;
+            await Promise.allSettled(ids.map(async (id) => {
+                try {
+                    const ir = await axios.get(`http://localhost:8000/api/insights/${id}`, { headers });
+                    if (ir.data?.insight_data) insightTotal++;
+                } catch {}
+                try {
+                    const fr = await axios.get(`http://localhost:8000/api/forecast/${id}`, { headers });
+                    if (fr.data?.forecast_data) forecastTotal++;
+                } catch {}
+            }));
+            setInsightsCount(insightTotal);
+            setForecastCount(forecastTotal);
+        } catch {
+            // Silently fail — counts stay null
+        }
+    };
 
     const fetchDatasets = async () => {
         setLoading(true);
@@ -76,9 +113,6 @@ const DashboardHome = () => {
     };
 
     const totalDatasets = datasets.length;
-    const insightsCount = 0;
-    const forecastModels = 0;
-    const reportsCount = 0;
 
     // Build chronological activity feed from real datasets
     const activityFeed = datasets.map((d, i) => ({
@@ -138,7 +172,9 @@ const DashboardHome = () => {
                     <div className="flex justify-between items-start">
                         <div>
                             <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Insights Generated</p>
-                            <p className="text-xl font-extrabold text-slate-400 mt-2">N/A</p>
+                            {insightsCount === null
+                                ? <p className="text-xl font-extrabold text-slate-400 mt-2">—</p>
+                                : <p className="text-3xl font-extrabold text-slate-850 dark:text-slate-100 mt-2">{insightsCount}</p>}
                         </div>
                         <div className="p-3 bg-violet-50 dark:bg-violet-950/40 text-violet-600 dark:text-violet-400 rounded-xl">
                             <Brain size={20} />
@@ -150,7 +186,9 @@ const DashboardHome = () => {
                     <div className="flex justify-between items-start">
                         <div>
                             <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Forecast Models</p>
-                            <p className="text-xl font-extrabold text-slate-400 mt-2">N/A</p>
+                            {forecastCount === null
+                                ? <p className="text-xl font-extrabold text-slate-400 mt-2">—</p>
+                                : <p className="text-3xl font-extrabold text-slate-850 dark:text-slate-100 mt-2">{forecastCount}</p>}
                         </div>
                         <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 rounded-xl">
                             <LineChart size={20} />
@@ -162,7 +200,9 @@ const DashboardHome = () => {
                     <div className="flex justify-between items-start">
                         <div>
                             <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Reports Generated</p>
-                            <p className="text-xl font-extrabold text-slate-400 mt-2">N/A</p>
+                            {reportsCount === null
+                                ? <p className="text-xl font-extrabold text-slate-400 mt-2">—</p>
+                                : <p className="text-3xl font-extrabold text-slate-850 dark:text-slate-100 mt-2">{reportsCount}</p>}
                         </div>
                         <div className="p-3 bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 rounded-xl">
                             <FileText size={20} />

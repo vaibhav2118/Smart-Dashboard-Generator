@@ -1,6 +1,7 @@
 import { Link, useLocation } from 'react-router-dom';
 import { useContext } from 'react';
 import { AuthContext } from '../context/AuthContext';
+import { useDataset } from '../context/DatasetContext';
 import { 
     LayoutDashboard, 
     Database,
@@ -13,15 +14,19 @@ import {
     ChevronLeft, 
     ChevronRight,
     X,
-    Sparkles
+    Sparkles,
+    Layers
 } from 'lucide-react';
 
 const Sidebar = ({ isCollapsed, toggleCollapse, mobileOpen, setMobileOpen }) => {
     const { logout } = useContext(AuthContext);
+    const { activeDataset } = useDataset();
     const location = useLocation();
 
-    // Get active dataset from local storage to keep navigation aligned, defaulting to demo-sales
-    const activeDatasetId = localStorage.getItem('activeDatasetId') || 'demo-sales';
+    // Resolved dataset ID — prefers live context, falls back to localStorage, then demo
+    const activeDatasetId = activeDataset?.id
+        || localStorage.getItem('activeDatasetId')
+        || 'demo-sales';
 
     const menuItems = [
         { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -35,8 +40,7 @@ const Sidebar = ({ isCollapsed, toggleCollapse, mobileOpen, setMobileOpen }) => 
     ];
 
     const isActive = (path) => {
-        // Handle matching parameter routes like /analysis/:id or /insights/:id
-        if (path.includes('/:id') || path.split('/').length > 2) {
+        if (path.split('/').length > 2) {
             const rootPath = path.split('/')[1];
             return location.pathname.startsWith(`/${rootPath}`);
         }
@@ -73,14 +77,35 @@ const Sidebar = ({ isCollapsed, toggleCollapse, mobileOpen, setMobileOpen }) => 
                 </button>
             </div>
 
+            {/* Active Dataset Indicator */}
+            {(!isCollapsed || mobileOpen) && (
+                <div className="mx-3 mt-3 mb-1 px-3 py-2 rounded-xl bg-slate-800/60 border border-slate-700/50 flex items-center gap-2 min-w-0">
+                    <Layers size={13} className="text-indigo-400 shrink-0" />
+                    <div className="min-w-0">
+                        <p className="text-[9px] font-bold uppercase tracking-widest text-slate-500 leading-none mb-0.5">Active Dataset</p>
+                        <p className="text-[11px] font-semibold text-slate-300 truncate leading-tight">
+                            {activeDataset?.filename
+                                || (activeDatasetId.startsWith('demo-')
+                                    ? activeDatasetId.replace('demo-', 'Demo: ').replace('sales','Sales').replace('finance','Finance').replace('hr','HR')
+                                    : 'None selected')}
+                        </p>
+                    </div>
+                </div>
+            )}
+            {isCollapsed && !mobileOpen && (
+                <div className="flex justify-center mt-3 mb-1">
+                    <Layers size={14} className="text-indigo-400" title={activeDataset?.filename || 'No dataset'} />
+                </div>
+            )}
+
             {/* Navigation links */}
-            <div className="flex-1 py-4 flex flex-col gap-1 px-3">
+            <div className="flex-1 py-2 flex flex-col gap-1 px-3">
                 {menuItems.map((item) => {
                     const Icon = item.icon;
                     const active = isActive(item.path);
                     return (
                         <Link
-                            key={item.path}
+                            key={item.label}
                             to={item.path}
                             onClick={() => setMobileOpen(false)}
                             className={`flex items-center gap-3 px-3 py-3 rounded-lg transition-all duration-150 ${

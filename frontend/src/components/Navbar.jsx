@@ -3,6 +3,7 @@ import { AuthContext } from '../context/AuthContext';
 import { Link, useNavigate } from 'react-router-dom';
 import ThemeToggle from './ThemeToggle';
 import axios from 'axios';
+import { useDataset } from '../context/DatasetContext';
 import { 
     Menu, 
     LogOut, 
@@ -11,11 +12,13 @@ import {
     Bell, 
     ChevronDown, 
     Database, 
-    FileText 
+    FileText,
+    Layers
 } from 'lucide-react';
 
 const Navbar = ({ setMobileOpen }) => {
     const { user, logout } = useContext(AuthContext);
+    const { activeDataset } = useDataset();
     const [dropdownOpen, setDropdownOpen] = useState(false);
     const [notificationsOpen, setNotificationsOpen] = useState(false);
     const [datasetsCount, setDatasetsCount] = useState(0);
@@ -119,6 +122,18 @@ const Navbar = ({ setMobileOpen }) => {
                     <div className="flex items-center gap-1">
                         <span>Last Login: <strong className="text-slate-700 dark:text-slate-300 font-bold">Today</strong></span>
                     </div>
+                    {/* Active Dataset badge */}
+                    {activeDataset && (
+                        <Link
+                            to={`/dataset/${activeDataset.id}`}
+                            className="flex items-center gap-1.5 px-2.5 py-1 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-900/50 rounded-lg text-indigo-700 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-950/60 transition"
+                        >
+                            <Layers size={11} className="shrink-0" />
+                            <span className="font-bold truncate max-w-[120px]" title={activeDataset.filename}>
+                                {activeDataset.filename}
+                            </span>
+                        </Link>
+                    )}
                 </div>
             </div>
 

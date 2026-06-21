@@ -3,6 +3,8 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
 import { getDataset } from '../utils/demoData';
 import { ThemeContext } from '../context/ThemeContext';
+import { useDataset } from '../context/DatasetContext';
+import DatasetSelector from '../components/DatasetSelector';
 import Plot from '../components/Plot';
 import { 
     LineChart, 
@@ -23,6 +25,7 @@ const Forecasting = () => {
     const { id } = useParams();
     const navigate = useNavigate();
     const { theme } = useContext(ThemeContext);
+    const { setActiveDataset } = useDataset();
     const [dataset, setDataset] = useState(null);
     const [forecast, setForecast] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -87,6 +90,7 @@ const Forecasting = () => {
                 return;
             }
             setDataset(resolved);
+            setActiveDataset(resolved); // sync global context
 
             // Pre-fill columns list selections
             const dateCols = resolved.classification?.date || [];
@@ -280,6 +284,10 @@ const Forecasting = () => {
                         </span>
                     </div>
                     <h1 className="text-3xl font-extrabold tracking-tight truncate mt-2">Predictive Forecasting</h1>
+                    {/* Dataset switcher */}
+                    <div className="mt-2">
+                        <DatasetSelector currentId={id} moduleBase="forecast" />
+                    </div>
                 </div>
                 <button
                     onClick={() => navigate('/reports')}

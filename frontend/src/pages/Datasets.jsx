@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { useNavigate, Link } from 'react-router-dom';
+import { useDataset } from '../context/DatasetContext';
 import { Database, Search, ArrowRight, Eye, BarChart3, Trash2, Plus, Calendar, AlertCircle } from 'lucide-react';
 
 const Datasets = () => {
@@ -12,6 +13,7 @@ const Datasets = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const navigate = useNavigate();
+    const { setActiveDataset, clearActiveDataset, activeDataset } = useDataset();
 
     useEffect(() => {
         fetchDatasets();
@@ -95,9 +97,9 @@ const Datasets = () => {
                     alert("Failed to delete dataset from backend.");
                 }
             }
-            // If active dataset is deleted, clear activeDatasetId from local storage
-            if (localStorage.getItem('activeDatasetId') === String(id)) {
-                localStorage.removeItem('activeDatasetId');
+            // If active dataset is deleted, clear context
+            if (String(activeDataset?.id) === String(id)) {
+                clearActiveDataset();
             }
         }
     };
@@ -120,13 +122,13 @@ const Datasets = () => {
             return new Date(b.upload_date) - new Date(a.upload_date);
         });
 
-    const triggerPreview = (id) => {
-        localStorage.setItem('activeDatasetId', id);
+    const triggerPreview = (id, dataset) => {
+        if (dataset) setActiveDataset(dataset);
         navigate(`/dataset/${id}`);
     };
 
-    const triggerAnalyze = (id) => {
-        localStorage.setItem('activeDatasetId', id);
+    const triggerAnalyze = (id, dataset) => {
+        if (dataset) setActiveDataset(dataset);
         navigate(`/analysis/${id}`);
     };
 
@@ -270,14 +272,14 @@ const Datasets = () => {
                                         <td className="px-6 py-4 text-right">
                                             <div className="flex items-center justify-end gap-2">
                                                 <button
-                                                    onClick={() => triggerPreview(dataset.id)}
+                                                    onClick={() => triggerPreview(dataset.id, dataset)}
                                                     className="p-1.5 text-slate-500 hover:text-indigo-600 dark:text-slate-400 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition"
                                                     title="Preview Data"
                                                 >
                                                     <Eye size={16} />
                                                 </button>
                                                 <button
-                                                    onClick={() => triggerAnalyze(dataset.id)}
+                                                    onClick={() => triggerAnalyze(dataset.id, dataset)}
                                                     className="p-1.5 text-slate-500 hover:text-indigo-600 dark:text-slate-400 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition"
                                                     title="Analyze Data"
                                                 >

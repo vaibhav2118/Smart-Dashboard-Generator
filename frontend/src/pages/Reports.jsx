@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
+import { useDataset } from '../context/DatasetContext';
 import { 
     FileText, 
     Plus, 
@@ -26,6 +27,7 @@ const Reports = () => {
     const [selectedDatasetId, setSelectedDatasetId] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
     const navigate = useNavigate();
+    const { setActiveDataset } = useDataset();
 
     useEffect(() => {
         const loadPageData = async () => {
@@ -122,7 +124,9 @@ const Reports = () => {
 
     const handleBuildReport = () => {
         if (!selectedDatasetId) return;
-        localStorage.setItem('activeDatasetId', selectedDatasetId);
+        // Update global context instead of raw localStorage write
+        const ds = datasets.find(d => String(d.id) === String(selectedDatasetId));
+        if (ds) setActiveDataset(ds);
         navigate(`/report-builder/${selectedDatasetId}`);
     };
 

@@ -2,6 +2,8 @@ import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import Plot from 'react-plotly.js';
+import { useDataset } from '../context/DatasetContext';
+import DatasetSelector from '../components/DatasetSelector';
 import {
     LayoutDashboard, ArrowLeft, Loader2, AlertCircle, ShieldCheck, RefreshCw,
     Brain, FileText, LineChart, Settings2, Copy, X, Download, Save,
@@ -31,6 +33,7 @@ const DashboardStudio = () => {
     const { datasetId } = useParams();
     const navigate = useNavigate();
     const dashboardRef = useRef(null);
+    const { setActiveDataset, allDatasets } = useDataset();
 
     const [dashboardData, setDashboardData] = useState(null);
     const [kpiData, setKpiData] = useState(null);
@@ -99,6 +102,9 @@ const DashboardStudio = () => {
             setDescription(dash.description || '');
             setTheme(dash.theme || 'dark');
             setKpiData(kpiRes.data);
+            // Sync active dataset to global context
+            const resolved = allDatasets.find(d => String(d.id) === String(datasetId));
+            if (resolved) setActiveDataset(resolved);
             
             // Populate sharing config & analytics
             setShareEnabled(dash.share_enabled || false);
@@ -360,6 +366,8 @@ const DashboardStudio = () => {
                                     style={{ color: T.subtext }}>
                                     <Edit3 size={14} />
                                 </button>
+                                {/* Dataset switcher */}
+                                <DatasetSelector currentId={datasetId} moduleBase="dashboard" variant={theme === 'dark' ? 'dark' : 'default'} />
                             </div>
                         )}
                     </div>
